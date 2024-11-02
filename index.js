@@ -1,9 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
-
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
 const port = process.env.PORT || 5000;
@@ -13,10 +11,6 @@ app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:5174'],
   credentials: true
 }));
-
-
-
-
 app.use(express.json());
 require('dotenv').config();
 app.use(cookieParser());
@@ -34,7 +28,7 @@ const client = new MongoClient(uri, {
   }
 });
 
-// out personal midleware
+// our personal midleware
 
 const logger = async (req, res, next) => {
   console.log('called:', req.host, req.originalUrl)
@@ -42,7 +36,7 @@ const logger = async (req, res, next) => {
 }
 
 const verifyToken=async(req,res,next)=>{
-  const token=req.cookies?.token;
+  const token=req?.cookies?.token;
   if(!token){
     return res.status(401).send({message:'Not Authorized'})
   }
@@ -68,21 +62,26 @@ async function run() {
 
     // auth related api
 
-    app.post('/jwt',logger, async (req, res) => {
+    app.post('/jwt',logger,async(req,res)=>{
+      const user=req.body;
+      const token=jwt.sign(user,process.env.ACCESS_TOKEN_SECRET,{expiresIn:'1h'});
+
+      res.cookie('token',token,{
+        httpOnly:true,
+        secure:true,
+        sameSite:'none'
+      })
+      .send({success:true})
+
+
+    });
+
+    app.post('/logOut', (req, res) => {
       const user = req.body;
-      console.log(user);
+      res.clearCookie('token', { maxAge: 0 }).send({ success: true });
+    });
 
-      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
-          expiresIn: '1h'
-      });
 
-      res
-          .cookie('token', token, {
-              httpOnly: true,
-              secure: false
-          })
-          .send({ success: true })
-  })
 
     // service related api
     app.get('/services',logger, async (req, res) => {
@@ -104,7 +103,7 @@ async function run() {
 
 
     // bookings related api
-    app.post('/bookings', logger,async(req,res)=>{
+    app.post('/bookings',async(req,res)=>{
       const bookings=req.body;
       const result=await bookingCollection.insertOne(bookings);
       res.send(result)
@@ -114,12 +113,11 @@ async function run() {
     // for secific data
     app.get('/bookings',logger,verifyToken, async(req,res)=>{
       let query={};
+      
       if(req.query.email !==req.user.email){
         return res.status(403).send({message :'Forbiden Access'})
 
       }
-      
-     
       if(req.query?.email){
         query={email:req.query.email}
       }
